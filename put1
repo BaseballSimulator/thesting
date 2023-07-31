@@ -1,1 +1,89 @@
-text put 1
+#text put 1
+#!/usr/bin/sh
+######################################################################
+# NAME: aitsimport.sh
+# LOCATION: /usr2/scripts/dba/scripts/sidpers
+# Purpose:  Script copies RCAS data files from ca-ngnet and executes
+#           upsupdate.sh to import data into SIDPERS.
+# 
+#
+# Dependencies: /sidpers/ups/upsimport.sh 
+#               /sidpers/ups/upsupdate.sh 
+#
+# Modified by:  Kathy Kent 29 JUL 2004
+#               Art Taradejna 23 FEB 2007                                    
+#
+#############################################################
+
+export TERM=vt100
+export ORACLE_HOME=/oracle/app/product/10.2.0
+export PATH=$PATH:/usr/bin:/local/bin:$ORACLE_HOME/bin
+export RUNLOG=`/usr2/scripts/sysadm/shared/runlog.pl`
+export LIST=`/usr2/scripts/sysadm/shared/notifications`
+export SIDPERS_HOME=/sidpers
+export Ups_Home="$SIDPERS_HOME/ups"
+export Ups_In="$SIDPERS_HOME/ups/upsin"
+export ORACLE_SID=CA
+export PASS=your_sidpers_password_here
+
+#---------Check Database Status---------------------
+# Checking status of database, exits script if db is down.
+
+DBSTATUS=`/usr2/scripts/sysadm/shared/dbcheck.pl`
+
+if [ $DBSTATUS != OPENNO ]; then
+    mailx -m -s "** ATTENTION **" $LIST < /usr2/scripts/sysadm/sql/dbanotice
+    exit 15
+fi
+
+#---------------Transfer files from cagnet ------------------
+
+echo "########## Begin UPS Import ######## " >> $RUNLOG 
+
+ssh root@ca-ngnet 'ls -l  /rfo/other/sidpers/bart/in/*.`date +%j`' \
+    >/dev/null 2>/dev/null
+
+if  [ ! $? -eq 0 ]
+
+then 
+ 
+     echo "##########No new files on remote server  ############ " >> $RUNLOG
+else 
+   
+      scp root@ca-ngnet:/rfo/other/sidpers/bart/in/*.`date +%j` /sidpers/ups/upsin/tmp 
+
+fi 
+
+ls -l /sidpers/ups/upsin/tmp/* >/dev/null 2>/dev/null 
+if [ ! $? -eq 0 ]  
+
+then
+
+     echo "########## No new files to process############ " >> $RUNLOG 
+
+else
+
+#------------Processes files --------------------------
+
+     echo "########## The following files wil be processed ####### " >> $RUNLOG
+     echo "`ls -l /sidpers/ups/upsin/tmp/*` " >>$RUNLOG
+     
+     cd $Ups_Home
+     ./upsupdate.sh  ##script in /sidpers/ups    
+fi 
+
+
+#-------Move old files to backup dir on remote system --------
+
+ssh root@ca-ngnet 'ls -l  /rfo/other/sidpers/bart/in/*.`date +%j`' \
+     >/dev/null 2>/dev/null
+if [ ! $? -eq 0 ]
+
+then 
+  echo "###No files to move on remote server ###" >> $RUNLOG
+  echo "####### End UPS Import ############\n " >> $RUNLOG
+else 
+
+        ssh root@ca-ngnet 'mv /rfo/other/sidpers/bart/in/*.`date +%j` \
+        /rfo/other/sidpers/bart/backup';	
+fi

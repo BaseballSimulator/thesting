@@ -1,3 +1,6 @@
+# countdown.py
+# uses tkinter to create a countdown clock
+
 import time
 from tkinter import *
 from tkinter import messagebox
